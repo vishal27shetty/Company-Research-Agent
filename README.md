@@ -172,16 +172,6 @@ The agent uses Gemini to classify user intent into 4 categories:
 
 ---
 
-## 🎬 Demo Scenarios
-
-See [DEMO.md](./DEMO.md) for detailed demo script covering:
-- The Confused User
-- The Efficient User
-- The Chatty User
-- The Edge Case User
-
----
-
 ## 📁 Project Structure
 
 ```
