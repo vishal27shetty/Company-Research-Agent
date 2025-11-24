@@ -95,8 +95,8 @@ workflow.add_conditional_edges(
 )
 
 # 4. Conflict Resolution Flow
-# After deep dive, we send new evidence back to the JUDGE to re-evaluate
-workflow.add_edge("deep_dive_node", "judge_node")
+# After deep dive, we proceed to DRAFTING (Assume conflict resolved by new data)
+workflow.add_edge("deep_dive_node", "drafter_node")
 
 # 5. Drafting Flow
 workflow.add_edge("drafter_node", "compiler_node")
@@ -106,8 +106,8 @@ workflow.add_edge("compiler_node", END)
 workflow.add_edge("chat_node", END)
 
 # 7. Surgical Update Flow
-# CRITICAL FIX: Updater goes straight to Compiler (Skips Judge/Drafter)
-workflow.add_edge("updater_node", "compiler_node")
+# UPDATER goes to END because it modifies the final_report directly (Append-Only)
+workflow.add_edge("updater_node", END)
 
 # Compile the graph with checkpointer
 memory = MemorySaver()

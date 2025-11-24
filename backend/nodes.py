@@ -293,7 +293,6 @@ async def deep_dive_node(state: AgentState):
     """
     logger.info("--- DEEP DIVE NODE ---")
     company = state["company_name"]
-    conflict_reason = state["conflict_reason"]
     reason = state.get("conflict_reason", "Verification needed")
     logger.info(f"Deep Dive Reason: {reason}")
     
@@ -312,6 +311,7 @@ async def deep_dive_node(state: AgentState):
     
     return {
         "raw_perplexity_data": new_data,
+        "conflict_status": "RESOLVED", # Mark as resolved so we don't get stuck
         "messages": [SystemMessage(content="Performed deep dive search with Tavily.")]
     }
 
@@ -453,8 +453,17 @@ async def compiler_node(state: AgentState):
         "hq_location": state.get("hq_location", "Global")
     })
     
+    # Append References section with all citations
+    citations = state.get("citations", [])
+    final_report = result.content
+    
+    if citations:
+        final_report += "\n\n---\n\n## References\n\n"
+        for idx, citation in enumerate(citations, 1):
+            final_report += f"{idx}. {citation}\n"
+    
     return {
-        "final_report": result.content,
+        "final_report": final_report,
         "messages": [SystemMessage(content="Report compilation complete.")]
     }
 
@@ -510,51 +519,73 @@ async def updater_node(state: AgentState):
     # ---------------------------------------------------------
     # STEP 3: PERFORM SURGICAL EDIT & ANSWER
     # ---------------------------------------------------------
-    current_section_content = artifacts.get(plan.target_section, "")
+    # ---------------------------------------------------------
+    # STEP 3: APPEND LOGIC (NEW)
+    # ---------------------------------------------------------
     
-    editor_prompt = f"""
-    You are an Expert Editor. 
-    
-    Task 1: Answer the user's question conversationally based on the New Evidence.
-    Task 2: Rewrite the Report Section to include the New Evidence. 
-    
-    CRITICAL EDITING RULES:
-    1. Keep all existing valid information.
-    2. If the New Evidence introduces a NEW TOPIC (like "Investor Equity", "Recent Lawsuit", etc.), append it as a NEW SUB-HEADING (###) at the VERY END of the section.
-    3. DO NOT insert new topics at the top.
-    4. DO NOT disrupt the existing flow.
-    5. Only modify existing text if it is factually incorrect based on the New Evidence.
-    6. **EXTREMELY IMPORTANT**: The 'updated_artifact_content' MUST contain ONLY the report content. 
-       - DO NOT include the user's question.
-       - DO NOT include the search query.
-       - DO NOT include meta-commentary like "Here is the updated section" or "I have added the info".
-       - Just return the raw markdown for the section.
-    
-    User Question: {last_message}
+    # Generate the new content block
+    append_prompt = f"""
+    You are a Research Assistant.
+    User Request: "{last_message}"
     New Evidence: {new_evidence}
     
-    Current Report Section Content:
-    {current_section_content}
+    Task:
+    1. Answer the user's question conversationally.
+    2. Create a new report section titled "### [Topic]" containing the new information.
+       IMPORTANT: Do NOT include the word "Update" in the title. Just use the Topic name.
     
-    Return the Direct Answer and the Fully Updated Section.
+    Return JSON with 'direct_answer' and 'new_section_content'.
     """
     
-    structured_editor = llm.with_structured_output(SurgicalEdit)
-    edit_result = await structured_editor.ainvoke(editor_prompt)
+    class AppendUpdate(BaseModel):
+        direct_answer: str = Field(..., description="Conversational answer to the user")
+        new_section_content: str = Field(..., description="The new markdown section to append")
+
+    structured_editor = llm.with_structured_output(AppendUpdate)
+    result = await structured_editor.ainvoke(append_prompt)
     
-    logger.info(f"Surgical edit complete. Answer: {edit_result.direct_answer[:100]}...")
+    logger.info(f"Append update complete. Answer: {result.direct_answer[:100]}...")
     
     # ---------------------------------------------------------
     # STEP 4: UPDATE STATE
     # ---------------------------------------------------------
-    # Update only the specific artifact
-    updated_artifacts = artifacts.copy()
-    updated_artifacts[plan.target_section] = edit_result.updated_artifact_content
+    # Append to the existing final report
+    current_report = state.get("final_report", "")
+    logger.info(f"Current report length before update: {len(current_report)}")
+    
+    if not current_report:
+        logger.warning("Current report is empty! Attempting to reconstruct from artifacts if available.")
+        # Fallback: Try to reconstruct from artifacts if final_report is missing
+        artifacts = state.get("artifacts", {})
+        if artifacts:
+             current_report = "\n\n".join([f"--- {k.upper()} BRIEFING ---\n{v}" for k, v in artifacts.items()])
+             logger.info(f"Reconstructed report from artifacts. Length: {len(current_report)}")
+
+    # Get new citations from the search
+    new_citations = search_results.get("citations", [])
+    existing_citations = state.get("citations", [])
+    all_citations = list(set(existing_citations + new_citations))  # Deduplicate
+    
+    # Remove old References section if it exists
+    if "## References" in current_report:
+        current_report = current_report.split("## References")[0].rstrip()
+        # Also remove the separator line before References
+        if current_report.endswith("---"):
+            current_report = current_report[:-3].rstrip()
+    
+    # Append new content
+    updated_report = current_report + "\n\n" + result.new_section_content
+    
+    # Append updated References section with all citations
+    if all_citations:
+        updated_report += "\n\n---\n\n## References\n\n"
+        for idx, citation in enumerate(all_citations, 1):
+            updated_report += f"{idx}. {citation}\n"
     
     return {
-        "artifacts": updated_artifacts,
-        # We append the DIRECT ANSWER to messages so the user sees it in chat
-        "messages": [SystemMessage(content=edit_result.direct_answer)] 
+        "final_report": updated_report,
+        "citations": all_citations,  # Update state with all citations
+        "messages": [SystemMessage(content=result.direct_answer)] 
     }
 
 # ============================================================================

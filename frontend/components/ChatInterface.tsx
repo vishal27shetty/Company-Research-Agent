@@ -12,14 +12,15 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowUp, RefreshCw, BookOpen, ShieldAlert, Search, Bot, AlertTriangle, ArrowRight } from "lucide-react"
+import { ArrowUp, RefreshCw, BookOpen, ShieldAlert, Search, Bot, AlertTriangle, ArrowRight, PanelRightClose, PanelRightOpen, Layout } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ReportCanvas } from "./ReportCanvas"
 
 interface Message {
     id?: string
     role: "user" | "assistant"
     content: string | any
-    type?: "text" | "status" | "warning" | "error" | "citations" | "conflict" | "report"
+    type?: "text" | "status" | "warning" | "error" | "citations" | "conflict" | "report" | "report_ready"
     displayContent?: string
     citations?: string[]
 }
@@ -223,111 +224,6 @@ function FollowUpQuestions({ content, onQuestionClick }: { content: string; onQu
     )
 }
 
-// Typing effect component for reports
-function TypingText({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
-    const [displayedText, setDisplayedText] = useState("")
-    const prevLengthRef = useRef(0)
-    const intervalRef = useRef<NodeJS.Timeout | null>(null)
-
-    useEffect(() => {
-        // Clear any existing interval
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current)
-            intervalRef.current = null
-        }
-
-        // If content was reset
-        if (content.length < prevLengthRef.current) {
-            setDisplayedText("")
-            prevLengthRef.current = 0
-            return
-        }
-
-        // If streaming stopped, show full content immediately (no animation)
-        if (!isStreaming) {
-            setDisplayedText(content)
-            prevLengthRef.current = content.length
-            return
-        }
-
-        // Only animate when streaming and content is growing
-        if (content.length > prevLengthRef.current && isStreaming) {
-            const startLength = prevLengthRef.current
-            const newChars = content.slice(startLength)
-            if (newChars.length === 0) return
-
-            let charIndex = 0
-            const targetLength = content.length
-
-            intervalRef.current = setInterval(() => {
-                // Check if content has changed (new content arrived)
-                if (content.length > targetLength) {
-                    // Content updated, catch up immediately
-                    clearInterval(intervalRef.current!)
-                    intervalRef.current = null
-                    setDisplayedText(content)
-                    prevLengthRef.current = content.length
-                    return
-                }
-
-                // Continue typing
-                if (charIndex < newChars.length) {
-                    const newLength = startLength + charIndex + 1
-                    setDisplayedText(content.slice(0, newLength))
-                    charIndex++
-                } else {
-                    // Finished this batch
-                    clearInterval(intervalRef.current!)
-                    intervalRef.current = null
-                    setDisplayedText(content)
-                    prevLengthRef.current = content.length
-                }
-            }, 8)
-
-            return () => {
-                if (intervalRef.current) {
-                    clearInterval(intervalRef.current)
-                    intervalRef.current = null
-                }
-            }
-        }
-    }, [content, isStreaming])
-
-    const showCursor = isStreaming && displayedText.length < content.length
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="prose prose-invert max-w-none mt-2"
-        >
-            <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                    h1: ({ node, ...props }) => <h1 className="text-3xl font-bold mt-6 mb-4 text-primary" {...props} />,
-                    h2: ({ node, ...props }) => <h2 className="text-2xl font-bold mt-5 mb-3 border-b border-border pb-1 text-primary" {...props} />,
-                    h3: ({ node, ...props }) => <h3 className="text-xl font-semibold mt-4 mb-2 text-primary" {...props} />,
-                    p: ({ node, ...props }) => <p className="mb-4 leading-relaxed" {...props} />,
-                    ul: ({ node, ...props }) => <ul className="list-disc pl-5 mb-4" {...props} />,
-                    ol: ({ node, ...props }) => <ol className="list-decimal pl-5 mb-4" {...props} />,
-                    li: ({ node, ...props }) => <li className="mb-1" {...props} />,
-                    strong: ({ node, ...props }) => <strong className="font-bold text-primary" {...props} />,
-                }}
-            >
-                {displayedText}
-            </ReactMarkdown>
-            {showCursor && (
-                <motion.span
-                    key="cursor"
-                    className="inline-block w-2 h-5 bg-primary ml-1"
-                    animate={{ opacity: [1, 0, 1] }}
-                    transition={{ duration: 0.8, repeat: Infinity }}
-                />
-            )}
-        </motion.div>
-    )
-}
-
 export function ChatInterface() {
     const [messages, setMessages] = useState<Message[]>([])
     const [input, setInput] = useState("")
@@ -336,9 +232,11 @@ export function ChatInterface() {
     const [isResearching, setIsResearching] = useState(false)
     const [isStreamingReport, setIsStreamingReport] = useState(false)
     const [waitingState, setWaitingState] = useState<string | null>(null)
+    const [currentReport, setCurrentReport] = useState<string>("")
+    const [isCanvasOpen, setIsCanvasOpen] = useState(true)
+
     const scrollAreaRef = useRef<HTMLDivElement>(null)
     const headerRef = useRef<HTMLDivElement>(null)
-    const currentReportIndex = useRef<number>(-1)
 
     useEffect(() => {
         setThreadId(Math.random().toString(36).substring(7))
@@ -359,8 +257,8 @@ export function ChatInterface() {
     const handleNewResearch = () => {
         setMessages([])
         setInput("")
+        setCurrentReport("")
         setThreadId(Math.random().toString(36).substring(7))
-        currentReportIndex.current = -1
     }
 
     const handleSubmit = async (e?: React.FormEvent, overrideInput?: string) => {
@@ -373,6 +271,9 @@ export function ChatInterface() {
         setIsLoading(true)
         setIsResearching(true)
         setWaitingState(null) // Don't show "Starting research..." text initially
+
+        // Don't auto-open canvas
+        // if (!isCanvasOpen) setIsCanvasOpen(true)
 
         try {
             const response = await fetch("http://localhost:8000/chat", {
@@ -392,9 +293,8 @@ export function ChatInterface() {
 
             if (!reader) return
 
-            let reportContent = ""
+            let reportBuffer = ""
             let citations: string[] = []
-            let currentMessageId: string | null = null
 
             while (true) {
                 const { value, done } = await reader.read()
@@ -411,45 +311,32 @@ export function ChatInterface() {
                             if (data.type === "status") {
                                 setWaitingState(data.content)
                             } else if (data.type === "citations") {
-                                // Create a standalone message for citations immediately so it shows up during research
                                 setMessages(prev => [...prev, {
                                     role: "assistant",
                                     content: data.content,
                                     type: "citations"
                                 }])
-                                // We don't update the 'citations' variable so it doesn't get attached to the report message as well
-                            } else if (data.type === "report" || data.type === "text") {
-                                console.log("Received report/text:", data.type, "Content length:", data.content.length)
+                            } else if (data.type === "report") {
+                                // Update Report Canvas with the full report
                                 const content = typeof data.content === 'string' ? data.content : JSON.stringify(data.content)
-                                reportContent += content
+                                setCurrentReport(content)
                                 setIsStreamingReport(true)
+                                setIsResearching(false)
 
-                                // Generate ID synchronously if it doesn't exist
-                                if (!currentMessageId) {
-                                    currentMessageId = Math.random().toString(36).substring(7)
-                                    console.log("Creating NEW message with ID:", currentMessageId)
-
-                                    setMessages(prev => [...prev, {
-                                        id: currentMessageId!,
-                                        role: "assistant",
-                                        content: reportContent,
-                                        displayContent: reportContent,
-                                        type: data.type || "report",
-                                        citations: citations.length > 0 ? citations : undefined
-                                    }])
-                                } else {
-                                    // Update existing message
-                                    // console.log("Updating message:", currentMessageId, "Content length:", reportContent.length)
-                                    setMessages(prev => prev.map(msg =>
-                                        msg.id === currentMessageId
-                                            ? {
-                                                ...msg,
-                                                content: reportContent,
-                                                displayContent: reportContent
-                                            }
-                                            : msg
-                                    ))
-                                }
+                                // Add notification that report is ready (Always show this in chat history)
+                                setMessages(prev => [...prev, {
+                                    role: "assistant",
+                                    content: "Report generated! Click below to view.",
+                                    type: "report_ready"
+                                }])
+                            } else if (data.type === "text") {
+                                // Text responses go to chat
+                                const content = typeof data.content === 'string' ? data.content : JSON.stringify(data.content)
+                                setMessages(prev => [...prev, {
+                                    role: "assistant",
+                                    content: content,
+                                    type: "text"
+                                }])
                                 setIsResearching(false)
                             } else if (data.type === "warning") {
                                 const statusText = String(data.content || "")
@@ -503,224 +390,267 @@ export function ChatInterface() {
                 scrollContainer.scrollTop = scrollContainer.scrollHeight
             }
         }
-    }, [messages])
+    }, [messages, waitingState])
 
     return (
         <div className="flex h-full flex-col relative overflow-hidden">
-            {/* Animated gradient background */}
+            {/* Background */}
             <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-muted/20 pointer-events-none" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)] pointer-events-none" />
 
-            {/* Header with glass effect */}
+            {/* Header - Enhanced Glassmorphism */}
             <motion.div
                 ref={headerRef}
-                className="relative z-10 flex h-16 items-center justify-between px-6 border-b border-border/30 bg-background/30 backdrop-blur-2xl"
+                className="relative z-20 flex h-16 items-center justify-between px-6 border-b border-white/10 bg-black/20 backdrop-blur-xl shadow-2xl shrink-0"
+                style={{
+                    background: 'linear-gradient(to bottom, rgba(20,20,20,0.8), rgba(20,20,20,0.6))',
+                    backdropFilter: 'blur(24px) saturate(200%)',
+                    WebkitBackdropFilter: 'blur(24px) saturate(200%)',
+                    boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)'
+                }}
             >
                 <div className="flex items-center gap-3">
+                    <Layout className="h-5 w-5 text-primary" />
                     <div>
                         <h1 className="font-bold text-lg font-mono bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
                             Research Assistant
                         </h1>
-                        <p className="text-xs text-muted-foreground font-mono">AI-Powered Company Research</p>
                     </div>
                 </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleNewResearch}
-                    className="h-9 w-9 hover:bg-muted/50"
-                    disabled={isLoading}
-                >
-                    <RefreshCw className={cn("h-4 w-4 transition-transform", isLoading && "animate-spin")} />
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsCanvasOpen(!isCanvasOpen)}
+                        className="h-9 w-9 hover:bg-muted/50 hidden md:flex"
+                        title={isCanvasOpen ? "Close Report View" : "Open Report View"}
+                    >
+                        {isCanvasOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleNewResearch}
+                        className="h-9 w-9 hover:bg-muted/50"
+                        disabled={isLoading}
+                        title="New Research"
+                    >
+                        <RefreshCw className={cn("h-4 w-4 transition-transform", isLoading && "animate-spin")} />
+                    </Button>
+                </div>
             </motion.div>
 
-            <ScrollArea ref={scrollAreaRef} className="flex-1 relative z-10">
-                <div className="space-y-6 pb-6 pt-4 px-6 max-w-4xl mx-auto">
+            {/* Main Content Area - Full Screen Toggle */}
+            <div className="flex-1 flex overflow-hidden relative z-10">
+                {/* Chat Window - Full Screen */}
+                <div
+                    className={cn(
+                        "flex flex-col h-full w-full max-w-5xl mx-auto",
+                        isCanvasOpen && "hidden"
+                    )}
+                >
+                    <ScrollArea ref={scrollAreaRef} className="flex-1">
+                        <div className="space-y-6 pb-6 pt-4 px-6">
+                            {messages.map((msg, idx) => (
+                                <motion.div
+                                    key={`msg-${idx}-${msg.type || 'text'}`}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: Math.min(idx * 0.05, 0.3) }}
+                                    className={cn("flex gap-4", msg.role === "user" ? "justify-end" : "justify-start items-start")}
+                                >
+                                    {msg.role === "assistant" && (
+                                        <Avatar className="h-8 w-8 border border-border shrink-0">
+                                            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10">
+                                                <Bot className="h-4 w-4 text-primary" />
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    )}
 
-                    {messages.map((msg, idx) => (
-                        <motion.div
-                            key={`msg-${idx}-${msg.type || 'text'}`}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: Math.min(idx * 0.05, 0.3) }}
-                            className={cn("flex gap-4", msg.role === "user" ? "justify-end" : "justify-start items-start")}
-                        >
-                            {msg.role === "assistant" && (
-                                <Avatar className="h-8 w-8 border border-border shrink-0">
-                                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10">
-                                        <Bot className="h-4 w-4 text-primary" />
-                                    </AvatarFallback>
-                                </Avatar>
-                            )}
-
-                            <div className={cn("flex flex-col gap-2 max-w-[80%]", msg.role === "user" && "items-end")}>
-                                {msg.role === "user" && (
-                                    <div className="bg-primary text-primary-foreground rounded-2xl px-4 py-2.5 text-sm shadow-sm">
-                                        {msg.content}
-                                    </div>
-                                )}
-
-                                {msg.role === "assistant" && (
-                                    <div className="space-y-2">
-                                        {/* Show citations if they exist on the message */}
-                                        {msg.citations && msg.citations.length > 0 && (
-                                            <RotatingLinks links={msg.citations} />
-                                        )}
-                                        {/* Also support legacy separate citation messages if any */}
-                                        {msg.type === "citations" && Array.isArray(msg.content) && (
-                                            <RotatingLinks links={msg.content} />
+                                    <div className={cn("flex flex-col gap-2 max-w-[90%]", msg.role === "user" && "items-end")}>
+                                        {msg.role === "user" && (
+                                            <div className="bg-primary text-primary-foreground rounded-2xl px-4 py-2.5 text-sm shadow-sm">
+                                                {msg.content}
+                                            </div>
                                         )}
 
-                                        {msg.type === "conflict" && msg.content && typeof msg.content === "object" && (
-                                            <motion.div
-                                                initial={{ opacity: 0, scale: 0.95 }}
-                                                animate={{ opacity: 1, scale: 1 }}
-                                                className={cn(
-                                                    "rounded-xl border p-5 text-sm shadow-lg",
-                                                    msg.content.status === "CONFLICT"
-                                                        ? "bg-red-950/30 border-red-900/50"
-                                                        : "bg-green-950/30 border-green-900/50"
+                                        {msg.role === "assistant" && (
+                                            <div className="space-y-2 w-full">
+                                                {msg.citations && msg.citations.length > 0 && (
+                                                    <RotatingLinks links={msg.citations} />
                                                 )}
-                                            >
-                                                <div className="flex items-center gap-2 font-semibold mb-3">
-                                                    <span className={cn(
-                                                        "text-base",
-                                                        msg.content.status === "CONFLICT" ? "text-red-400" : "text-green-400"
-                                                    )}>
-                                                        {msg.content.status === "CONFLICT" ? "⚠️ Conflict Detected" : "✓ Data Verification Passed"}
-                                                    </span>
-                                                </div>
-                                                {msg.content.reason && (
-                                                    <p className="text-muted-foreground text-sm mb-4 leading-relaxed">{msg.content.reason}</p>
+                                                {msg.type === "citations" && Array.isArray(msg.content) && (
+                                                    <RotatingLinks links={msg.content} />
                                                 )}
-                                                {msg.content.status === "CONFLICT" && (
-                                                    <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t border-border/30">
+
+                                                {msg.type === "conflict" && msg.content && typeof msg.content === "object" && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className={cn(
+                                                            "rounded-xl border p-4 text-sm shadow-sm",
+                                                            msg.content.status === "CONFLICT"
+                                                                ? "bg-red-950/30 border-red-900/50"
+                                                                : "bg-green-950/30 border-green-900/50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center gap-2 font-semibold mb-2">
+                                                            <span className={cn(
+                                                                "text-sm",
+                                                                msg.content.status === "CONFLICT" ? "text-red-400" : "text-green-400"
+                                                            )}>
+                                                                {msg.content.status === "CONFLICT" ? "⚠️ Conflict Detected" : "✓ Data Verification Passed"}
+                                                            </span>
+                                                        </div>
+                                                        {msg.content.reason && (
+                                                            <p className="text-muted-foreground text-xs mb-3 leading-relaxed">{msg.content.reason}</p>
+                                                        )}
+                                                        {msg.content.status === "CONFLICT" && (
+                                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="destructive"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault()
+                                                                        handleSubmit(undefined, "Yes, resolve the conflict.")
+                                                                    }}
+                                                                    disabled={isLoading}
+                                                                    className="flex-1 h-8 text-xs"
+                                                                >
+                                                                    Resolve
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault()
+                                                                        handleSubmit(undefined, "Ignore conflict and proceed.")
+                                                                    }}
+                                                                    disabled={isLoading}
+                                                                    className="flex-1 h-8 text-xs"
+                                                                >
+                                                                    Ignore
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                    </motion.div>
+                                                )}
+
+                                                {/* Only show simple text responses in chat, reports go to canvas */}
+                                                {msg.type === "text" && (
+                                                    <div className="bg-card/50 backdrop-blur-sm rounded-2xl border border-border/50 p-4 shadow-sm text-sm">
+                                                        <div className="prose prose-invert prose-sm max-w-none pl-2">
+                                                            <ReactMarkdown>
+                                                                {typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
+                                                            </ReactMarkdown>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Report Ready Notification */}
+                                                {msg.type === "report_ready" && (
+                                                    <div className="bg-green-950/30 border border-green-900/50 rounded-2xl p-4 shadow-sm text-sm">
+                                                        <p className="text-green-400 mb-3">{msg.content}</p>
                                                         <Button
-                                                            size="default"
-                                                            variant="destructive"
-                                                            onClick={(e) => {
-                                                                e.preventDefault()
-                                                                handleSubmit(undefined, "Yes, resolve the conflict.")
-                                                            }}
-                                                            disabled={isLoading}
-                                                            className="flex-1 min-w-[140px] h-10 font-semibold shadow-md hover:shadow-lg transition-all"
-                                                        >
-                                                            Resolve Conflict
-                                                        </Button>
-                                                        <Button
-                                                            size="default"
                                                             variant="outline"
-                                                            onClick={(e) => {
-                                                                e.preventDefault()
-                                                                handleSubmit(undefined, "Ignore conflict and proceed.")
-                                                            }}
-                                                            disabled={isLoading}
-                                                            className="flex-1 min-w-[140px] h-10 font-semibold border-2 hover:bg-muted/50 transition-all"
+                                                            size="sm"
+                                                            className="w-full gap-2 border-green-900/50 hover:bg-green-950/50"
+                                                            onClick={() => setIsCanvasOpen(true)}
                                                         >
-                                                            Ignore
+                                                            <PanelRightOpen className="h-4 w-4" />
+                                                            Open Report Canvas
                                                         </Button>
                                                     </div>
                                                 )}
-                                            </motion.div>
-                                        )}
 
-                                        {(msg.type === "report" || msg.type === "text") && (
-                                            <>
-                                                <div className="bg-card/50 backdrop-blur-sm rounded-2xl border border-border/50 p-5 shadow-sm">
-                                                    <TypingText
-                                                        content={typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
-                                                        isStreaming={isStreamingReport && idx === messages.length - 1}
-                                                    />
-                                                </div>
-                                                {!isStreamingReport && (
-                                                    <FollowUpQuestions
-                                                        content={typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
-                                                        onQuestionClick={(question) => handleSubmit(undefined, question)}
-                                                    />
+                                                {msg.type === "error" && (
+                                                    <Alert variant="destructive" className="rounded-xl">
+                                                        <AlertTriangle className="h-4 w-4" />
+                                                        <AlertDescription className="text-sm">
+                                                            {msg.content}
+                                                        </AlertDescription>
+                                                    </Alert>
                                                 )}
-                                            </>
-                                        )}
-
-                                        {msg.type === "error" && (
-                                            <Alert variant="destructive" className="rounded-xl">
-                                                <AlertTriangle className="h-4 w-4" />
-                                                <AlertDescription className="text-sm">
-                                                    {msg.content}
-                                                </AlertDescription>
-                                            </Alert>
+                                            </div>
                                         )}
                                     </div>
+                                </motion.div>
+                            ))}
+
+                            <AnimatePresence mode="wait">
+                                {isResearching && !waitingState && (
+                                    <motion.div
+                                        key="researching"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="flex items-center gap-4"
+                                    >
+                                        <Avatar className="h-8 w-8 border border-border shrink-0">
+                                            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10">
+                                                <Bot className="h-4 w-4 text-primary" />
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <SmallMagnifyingGlass text="Researching..." />
+                                    </motion.div>
                                 )}
+                                {waitingState && (
+                                    <motion.div
+                                        key={`waiting-${waitingState}`}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className="flex items-center gap-4"
+                                    >
+                                        <Avatar className="h-8 w-8 border border-border shrink-0">
+                                            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10">
+                                                <Bot className="h-4 w-4 text-primary" />
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        {waitingState.toLowerCase().includes("conflict") ? (
+                                            <AnimatedWaitingState text={waitingState} icon={ShieldAlert} />
+                                        ) : (
+                                            <>
+                                                <SmallMagnifyingGlass />
+                                                <AnimatedWaitingState text={waitingState} />
+                                            </>
+                                        )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </ScrollArea>
+
+                    {/* Input Area */}
+                    <div className="p-4 border-t border-border/30 bg-background/30 backdrop-blur-2xl shrink-0">
+                        <form onSubmit={(e) => handleSubmit(e)}>
+                            <div className="relative flex items-center">
+                                <Input
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder="Research a company..."
+                                    className="flex-1 h-12 pr-14 bg-background/50 border-border/50 focus:border-primary/50 rounded-xl"
+                                    disabled={isLoading || isResearching || isStreamingReport}
+                                />
+                                <Button
+                                    type="submit"
+                                    size="icon"
+                                    disabled={isLoading || isResearching || isStreamingReport || !input.trim()}
+                                    className="absolute right-2 h-8 w-8 rounded-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <ArrowUp className="h-4 w-4" />
+                                </Button>
                             </div>
-                        </motion.div>
-                    ))}
-
-                    <AnimatePresence mode="wait">
-                        {isResearching && !waitingState && (
-                            <motion.div
-                                key="researching"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                className="flex items-center gap-4"
-                            >
-                                <Avatar className="h-8 w-8 border border-border shrink-0">
-                                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10">
-                                        <Bot className="h-4 w-4 text-primary" />
-                                    </AvatarFallback>
-                                </Avatar>
-                                <SmallMagnifyingGlass />
-                            </motion.div>
-                        )}
-                        {waitingState && (
-                            <motion.div
-                                key={`waiting-${waitingState}`}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                className="flex items-center gap-4"
-                            >
-                                <Avatar className="h-8 w-8 border border-border shrink-0">
-                                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10">
-                                        <Bot className="h-4 w-4 text-primary" />
-                                    </AvatarFallback>
-                                </Avatar>
-                                {waitingState.toLowerCase().includes("conflict") ? (
-                                    <AnimatedWaitingState text={waitingState} icon={ShieldAlert} />
-                                ) : (
-                                    <>
-                                        <SmallMagnifyingGlass />
-                                        <AnimatedWaitingState text={waitingState} />
-                                    </>
-                                )}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-            </ScrollArea>
-
-            {/* Input area with glass effect */}
-            <div className="relative z-10 p-6 border-t border-border/30 bg-background/30 backdrop-blur-2xl">
-                <form onSubmit={(e) => handleSubmit(e)} className="max-w-4xl mx-auto">
-                    <div className="relative flex items-center">
-                        <Input
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="Research a company..."
-                            className="flex-1 h-12 pr-14 bg-background/50 border-border/50 focus:border-primary/50 rounded-xl"
-                            disabled={isLoading || isResearching || isStreamingReport}
-                        />
-                        <Button
-                            type="submit"
-                            size="icon"
-                            disabled={isLoading || isResearching || isStreamingReport || !input.trim()}
-                            className="absolute right-2 h-8 w-8 rounded-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <ArrowUp className="h-4 w-4" />
-                        </Button>
+                        </form>
                     </div>
-                </form>
+                </div>
+
+                {/* Report Canvas - Full Screen */}
+                {isCanvasOpen && (
+                    <div className="flex flex-col h-full w-full">
+                        <ReportCanvas content={currentReport} isStreaming={isStreamingReport} />
+                    </div>
+                )}
             </div>
         </div>
     )

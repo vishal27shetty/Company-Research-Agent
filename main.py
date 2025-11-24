@@ -114,13 +114,18 @@ async def chat_endpoint(request: ChatRequest):
                             import logging
                             logging.warning("Chat node returned no messages!")
                     
-                    # 7. Updater Node -> Direct Answer
+                    # 7. Updater Node -> Direct Answer + Updated Report
                     elif node_name == "updater_node":
                         yield f"data: {json.dumps({'type': 'status', 'content': 'Updating research with new information...'})}\n\n"
                         messages = state_update.get("messages", [])
                         if messages:
                             content = messages[-1].content
                             yield f"data: {json.dumps({'type': 'text', 'content': content})}\n\n"
+                        
+                        # Stream the updated report
+                        updated_report = state_update.get("final_report")
+                        if updated_report:
+                            yield f"data: {json.dumps({'type': 'report', 'content': updated_report})}\n\n"
                         
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
