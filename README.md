@@ -68,8 +68,11 @@ This AI agent demonstrates advanced agentic behavior by:
    Create a `.env` file in the root directory:
    ```env
    GOOGLE_API_KEY=your_gemini_api_key
-   PERPLEXITY_API_KEY=your_perplexity_api_key
-   TAVILY_API_KEY=your_tavily_api_key
+PERPLEXITY_API_KEY=your_perplexity_api_key
+TAVILY_API_KEY=your_tavily_api_key
+# Optional: LangSmith Observability
+LANGCHAIN_API_KEY=your_langchain_api_key
+LANGCHAIN_PROJECT="Company Research Agent"
    ```
 
 5. **Start the backend server**

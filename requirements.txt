@@ -8,3 +8,4 @@ langchain-core
 langgraph
 pydantic
 python-dotenv
+langsmith

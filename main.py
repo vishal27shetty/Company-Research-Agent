@@ -4,6 +4,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Enable LangSmith Tracing if API Key is present
+import os
+if os.getenv("LANGCHAIN_API_KEY"):
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT", "Company Research Agent")
+    print("✅ LangSmith Observability Enabled")
+
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
