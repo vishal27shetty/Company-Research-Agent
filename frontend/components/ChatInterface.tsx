@@ -450,7 +450,59 @@ export function ChatInterface() {
                     )}
                 >
                     <ScrollArea ref={scrollAreaRef} className="flex-1">
-                        <div className="space-y-6 pb-6 pt-4 px-6">
+                        <div className="space-y-6 pb-32 pt-4 px-6">
+                            {/* Welcome Message - Only show when no messages */}
+                            {messages.length === 0 && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -20 }}
+                                    className="flex flex-col items-center justify-center min-h-[60vh] space-y-8"
+                                >
+                                    {/* Welcome Text */}
+                                    <div className="text-center space-y-3">
+                                        <h2 className="text-2xl font-mono text-muted-foreground">
+                                            Welcome to Company Research Agent
+                                        </h2>
+                                        <p className="text-sm font-mono text-muted-foreground/70">
+                                            AI-powered research assistant for comprehensive company intelligence
+                                        </p>
+                                    </div>
+
+                                    {/* Suggested Prompts */}
+                                    <div className="w-full max-w-2xl space-y-3">
+                                        <p className="text-xs font-mono text-muted-foreground/60 text-center mb-4">
+                                            Try these prompts:
+                                        </p>
+                                        <div className="grid gap-3">
+                                            {[
+                                                "Research Apple Inc",
+                                                "Analyze Tesla's financial performance",
+                                                "What's the latest news about Microsoft?",
+                                                "Compare Google and Meta's market position"
+                                            ].map((prompt, idx) => (
+                                                <motion.button
+                                                    key={idx}
+                                                    initial={{ opacity: 0, x: -10 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    transition={{ delay: 0.1 + idx * 0.1 }}
+                                                    onClick={() => {
+                                                        setInput(prompt)
+                                                        // Auto-submit after a brief moment
+                                                        setTimeout(() => handleSubmit(undefined, prompt), 100)
+                                                    }}
+                                                    className="group text-left px-4 py-3 rounded-lg border border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all font-mono text-sm text-muted-foreground hover:text-foreground"
+                                                >
+                                                    <span className="opacity-50 mr-2">→</span>
+                                                    {prompt}
+                                                </motion.button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* Chat Messages */}
                             {messages.map((msg, idx) => (
                                 <motion.div
                                     key={`msg-${idx}-${msg.type || 'text'}`}

@@ -34,10 +34,11 @@ from backend.prompts import (
     TARGETED_RESEARCH_QUERY_PROMPT,
     QUERY_FORMAT_GUIDELINES
 )
-import langchain
+from langchain_core import globals as langchain_globals
 try:
-    langchain.verbose = False
-except AttributeError:
+    langchain_globals.set_verbose(False)
+    langchain_globals.set_debug(False)
+except Exception:
     pass
 
 from google import genai
