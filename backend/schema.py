@@ -6,12 +6,13 @@ from pydantic import BaseModel, Field # Added for IntakeDecision
 
 class IntakeDecision(BaseModel):
     intent: str = Field(description="One of: RESEARCH, UPDATE, RESOLVE, CHAT, CLARIFY")
-    company_name: str = Field(description="Extracted company name for RESEARCH/UPDATE/RESOLVE", default="")
+    company_name: str | None = Field(description="Extracted company name for RESEARCH/UPDATE/RESOLVE", default=None)
     research_type: str = Field(description="Type of research: 'full' (default) or 'targeted'", default="full")
-    research_focus: str = Field(description="Specific topic for targeted research (e.g., 'market size', 'competitors')", default="")
-    user_feedback: str = Field(description="Extracted feedback/instructions for UPDATE", default="")
-    needs_clarification: bool = Field(description="True if the request is vague", default=False)
-    clarification_question: str = Field(description="Question to ask if clarification is needed", default="")
+    research_focus: str | None = Field(description="Specific topic for targeted research (e.g., 'market size', 'competitors')", default=None)
+    user_feedback: str | None = Field(description="Extracted feedback/instructions for UPDATE", default=None)
+    needs_clarification: bool = Field(description="True if the request is vague or ambiguous", default=False)
+    clarification_question: str | None = Field(description="Question to ask if clarification is needed", default=None)
+    reasoning: str = Field(description="Reasoning for the classification")
 
 class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]

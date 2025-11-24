@@ -17,7 +17,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from backend.schema import AgentState
+from backend.schema import AgentState, IntakeDecision
 from backend.utils import search_perplexity, search_tavily
 from backend.prompts import (
     INTAKE_SYSTEM_PROMPT,
@@ -32,7 +32,8 @@ from backend.prompts import (
     INDUSTRY_ANALYZER_QUERY_PROMPT,
     NEWS_SCANNER_QUERY_PROMPT,
     TARGETED_RESEARCH_QUERY_PROMPT,
-    QUERY_FORMAT_GUIDELINES
+    QUERY_FORMAT_GUIDELINES,
+    CHAT_SYSTEM_PROMPT
 )
 from langchain_core import globals as langchain_globals
 try:
@@ -57,13 +58,7 @@ client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 # ============================================================================
 # NODE 1: INTAKE (ROUTER)
 # ============================================================================
-class IntakeDecision(BaseModel):
-    intent: str = Field(..., description="The user's intent: RESEARCH, CHAT, UPDATE, or RESOLVE")
-    company_name: str | None = Field(None, description="The company name if present")
-    research_type: str = Field("full", description="Type of research: 'full' for comprehensive, 'targeted' for specific.")
-    research_focus: str | None = Field(None, description="Specific area of focus if research_type is 'targeted'.")
-    user_feedback: str | None = Field(None, description="Any specific feedback or constraints from the user.")
-    reasoning: str = Field(..., description="Reasoning for the classification")
+# IntakeDecision is now imported from backend.schema
 
 async def intake_node(state: AgentState):
     """
@@ -106,14 +101,17 @@ async def intake_node(state: AgentState):
         logger.info("Research intent detected but no company name. Overriding to CHAT to ask for clarification.")
         result.intent = "CHAT"
 
+    # Logic to handle clarification
+    if result.needs_clarification:
+        result.intent = "CLARIFY"
+
     return {
         "intent": result.intent,
         "company_name": result.company_name or state.get("company_name"), # Persist company name if already known
         "research_type": result.research_type,
         "research_focus": result.research_focus,
         "user_feedback": result.user_feedback,
-        # If needs_clarification is True, we might want to handle that, 
-        # but for now we'll rely on CLARIFY intent.
+        "clarification_question": result.clarification_question
     }
 
 # ============================================================================
@@ -624,8 +622,12 @@ async def chat_node(state: AgentState):
     
     context_text = final_report if final_report else "No research report has been generated yet."
     
+    # Check if we are in CLARIFY mode - if so, skip external search
+    if state.get("intent") == "CLARIFY":
+        # Don't perform external search, just ask for clarification
+        pass
     # Only check for search if NOT small talk AND user is asking a specific question
-    if not is_small_talk and final_report:
+    elif not is_small_talk and final_report:
         # Step 1: Check if we need external info
         check_prompt = f"""
         User Question: "{last_message}"
@@ -649,36 +651,18 @@ async def chat_node(state: AgentState):
             context_text += f"\n\n[EXTERNAL SEARCH RESULTS]:\n{search_res['content']}"
     
     # Step 3: Generate Answer
-    system_prompt = """You are a Company Research Assistant focused EXCLUSIVELY on business and company research.
+    
+    # Check if we are in CLARIFY mode
+    if state.get("intent") == "CLARIFY":
+        clarification_q = state.get("clarification_question")
+        if clarification_q:
+            # If the intake node generated a specific question, use it to guide the LLM
+            system_prompt = CHAT_SYSTEM_PROMPT + f"\n\nIMPORTANT: The user's request was unclear. You need to ask them to clarify: '{clarification_q}'"
+        else:
+             system_prompt = CHAT_SYSTEM_PROMPT + "\n\nIMPORTANT: The user's request was unclear. You need to ask them to clarify what they want."
+    else:
+        system_prompt = CHAT_SYSTEM_PROMPT
 
-### STRICT TOPIC BOUNDARIES
-**YOU MUST REFUSE** to discuss topics unrelated to:
-- Company research, analysis, and business intelligence
-- Industry trends, market analysis, competitive landscape
-- Financial performance, metrics, and business strategy
-- Corporate news, leadership, and organizational structure
-
-**FORBIDDEN TOPICS** (politely decline):
-- Personal advice (health, nutrition, lifestyle, relationships)
-- General knowledge questions (science, history, geography)
-- Entertainment, sports, hobbies, or casual topics
-- Technical support unrelated to business research
-- Any topic not directly related to company/business research
-
-### RESPONSE RULES
-1. **If user asks off-topic question**: Politely decline and redirect to company research
-   - Example: "I'm specifically designed for company research. I can help you analyze businesses, competitors, and market trends. Which company would you like to research?"
-   
-2. **If no report exists**: Guide user to start research
-   - Example: "I'm ready to research any company. Which company would you like to investigate?"
-   
-3. **If report exists**: Answer questions ONLY about the researched company or related business topics
-   
-4. **Brief greetings are OK**: "Hi", "Thanks" → respond briefly and professionally, then ask about research needs
-
-### IMPORTANT
-Your goal is to be helpful and professional, but ONLY for company research topics. Firmly but politely decline off-topic requests.
-If you used External Search results, mention that this info was found live."""
     
     # Step 3: Generate Answer - directly invoke with messages
     try:

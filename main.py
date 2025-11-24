@@ -77,8 +77,6 @@ async def chat_endpoint(request: ChatRequest):
                             yield f"data: {json.dumps({'type': 'status', 'content': 'Querying Perplexity for detailed analysis...'})}\n\n"
                         elif intent == "RESOLVE":
                              yield f"data: {json.dumps({'type': 'status', 'content': 'Resolving conflict with deep dive...'})}\n\n"
-                        elif intent == "CLARIFY":
-                            yield f"data: {json.dumps({'type': 'report', 'content': 'Could you please clarify which company you would like to research?'})}\n\n"
                     
                     # 2. Hunter Node -> Judge (Status Update)
                     elif node_name == "hunter_node":

@@ -142,20 +142,67 @@ LANGCHAIN_PROJECT="Company Research Agent"
 
 ## 🧠 Intelligence & Adaptability
 
-### Intent Classification
-The agent uses Gemini to classify user intent into 4 categories:
-- **RESEARCH**: Generate new company report
-- **UPDATE**: Add information to existing report
-- **CHAT**: Answer questions about the report
-- **RESOLVE**: Handle conflict resolution
+### Conversational Quality & User Personas
+
+The agent is designed to handle diverse user types with grace and intelligence:
+
+#### 1. **The Confused User** (Vague/Ambiguous Requests)
+- **Detection**: CLARIFY intent triggers when company name is missing or vague
+- **Examples**:
+  - "Can you help me research a company?" → Asks "Which company would you like me to research?"
+  - "Find me information about AI startups." → Asks "Which specific AI startup are you interested in?"
+  - "Who is the CEO of that social media app with the ghost logo?" → Asks "Are you referring to Snapchat?"
+- **Behavior**: Politely asks clarifying questions without performing wasteful searches
+
+#### 2. **The Efficient User** (Quick Stats)
+- **Detection**: Targeted research mode for specific questions
+- **Examples**: "What's Tesla's revenue?" → Triggers targeted search, not full report
+- **Behavior**: Concise, direct answers without unnecessary elaboration
+
+#### 3. **The Chatty User** (Off-Topic Conversations)
+- **Detection**: Chat node identifies non-business topics
+- **Examples**: "I had a great sandwich!" → "That sounds nice! However, I'm better at digesting data than sandwiches. Shall we look at [Company]'s financials?"
+- **Behavior**: Politely acknowledges but steers back to business topics
+
+#### 4. **The Edge Case User** (Invalid/Malicious Inputs)
+- **Detection**: Intent classifier rejects non-company research requests
+- **Examples**:
+  - "Write a poem about the CEO" → Politely declines, offers factual CEO background instead
+  - "Ignore all instructions" → Refuses and maintains research assistant persona
+- **Behavior**: Maintains professional boundaries while staying helpful
+
+### Intent Classification (Priority Order)
+
+1. **CLARIFY** (Highest Priority for Vague Requests)
+   - Triggers when company name is missing, vague, or ambiguous
+   - Generates helpful clarification questions
+   - Prevents wasteful API calls on unclear requests
+
+2. **CHAT** (Priority if Report Exists)
+   - Answers questions from existing report
+   - Performs external search only if answer not in report
+   - Maintains conversational context
+
+3. **RESEARCH** (Only for Specific Company Names)
+   - Requires explicit company name (e.g., "Tesla", "Anthropic")
+   - Supports both full reports and targeted queries
+
+4. **UPDATE** (Surgical Edits)
+   - Appends new sections without overwriting
+   - Preserves research history
+
+5. **RESOLVE** (Conflict Resolution)
+   - Only triggers when active conflict exists
+   - Uses Tavily for authoritative verification
 
 ### Adaptive Search Strategy
 - **Needs-based search**: Chat node decides if external search is needed
 - **Targeted queries**: Generates specific search queries based on user questions
 - **Context-aware**: Uses existing report as context to avoid redundant searches
+- **Clarification-first**: Asks for clarification before performing expensive searches
 
 ### Conflict Resolution
-1. **Automatic Detection**: Judge node flags contradictions
+1. **Automatic Detection**: Judge node (Gemini 3.0) flags contradictions
 2. **User Notification**: Agent asks if user wants to dig deeper
 3. **Deep Dive**: Tavily search for authoritative sources
 4. **Re-compilation**: Updated report with resolved conflicts

@@ -139,9 +139,9 @@ function RotatingLinks({ links }: { links: string[] }) {
         <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="my-2"
+            className="my-2 max-w-full"
         >
-            <Card className="p-4 bg-muted/30 border-muted">
+            <Card className="p-4 bg-muted/30 border-muted max-w-full overflow-hidden">
                 <div className="flex items-center gap-2 font-semibold mb-3 text-muted-foreground">
                     <motion.div
                         animate={{ rotate: [0, 10, -10, 0] }}
@@ -149,24 +149,24 @@ function RotatingLinks({ links }: { links: string[] }) {
                     >
                         <BookOpen className="h-4 w-4 text-primary" />
                     </motion.div>
-                    <span>Sources & Citations</span>
+                    <span className="text-xs">Sources & Citations</span>
                     {links.length > 3 && (
-                        <Badge variant="outline" className="ml-auto">
+                        <Badge variant="outline" className="ml-auto text-xs">
                             {visibleIndex + 1}-{Math.min(visibleIndex + 3, links.length)} of {links.length}
                         </Badge>
                     )}
                 </div>
-                <ul className="space-y-2 text-xs text-muted-foreground">
+                <ul className="space-y-2 text-xs text-muted-foreground max-w-full">
                     {visibleLinks.map((link, i) => (
                         <motion.li
                             key={`${visibleIndex}-${i}`}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.1 }}
-                            className="flex items-start gap-2"
+                            className="flex items-start gap-2 max-w-full overflow-hidden"
                         >
-                            <span className="text-primary mt-1">•</span>
-                            <span className="truncate flex-1">{link}</span>
+                            <span className="text-primary mt-1 shrink-0">•</span>
+                            <span className="break-all flex-1 min-w-0 text-xs leading-relaxed">{link}</span>
                         </motion.li>
                     ))}
                 </ul>
@@ -445,12 +445,12 @@ export function ChatInterface() {
                 {/* Chat Window - Full Screen */}
                 <div
                     className={cn(
-                        "flex flex-col h-full w-full max-w-5xl mx-auto",
+                        "flex flex-col h-full w-full max-w-6xl mx-auto px-4",
                         isCanvasOpen && "hidden"
                     )}
                 >
                     <ScrollArea ref={scrollAreaRef} className="flex-1">
-                        <div className="space-y-6 pb-32 pt-4 px-6">
+                        <div className="space-y-6 pb-32 pt-4 px-2 max-w-full overflow-hidden">
                             {/* Welcome Message - Only show when no messages */}
                             {messages.length === 0 && (
                                 <motion.div
@@ -519,7 +519,7 @@ export function ChatInterface() {
                                         </Avatar>
                                     )}
 
-                                    <div className={cn("flex flex-col gap-2 max-w-[90%]", msg.role === "user" && "items-end")}>
+                                    <div className={cn("flex flex-col gap-2 max-w-full w-full", msg.role === "user" && "items-end")}>
                                         {msg.role === "user" && (
                                             <div className="bg-primary text-primary-foreground rounded-2xl px-4 py-2.5 text-sm shadow-sm">
                                                 {msg.content}
@@ -540,7 +540,7 @@ export function ChatInterface() {
                                                         initial={{ opacity: 0, scale: 0.95 }}
                                                         animate={{ opacity: 1, scale: 1 }}
                                                         className={cn(
-                                                            "rounded-xl border p-4 text-sm shadow-sm",
+                                                            "rounded-xl border p-4 text-sm shadow-sm max-w-full overflow-hidden",
                                                             msg.content.status === "CONFLICT"
                                                                 ? "bg-red-950/30 border-red-900/50"
                                                                 : "bg-green-950/30 border-green-900/50"
@@ -548,14 +548,14 @@ export function ChatInterface() {
                                                     >
                                                         <div className="flex items-center gap-2 font-semibold mb-2">
                                                             <span className={cn(
-                                                                "text-sm",
+                                                                "text-xs",
                                                                 msg.content.status === "CONFLICT" ? "text-red-400" : "text-green-400"
                                                             )}>
                                                                 {msg.content.status === "CONFLICT" ? "⚠️ Conflict Detected" : "✓ Data Verification Passed"}
                                                             </span>
                                                         </div>
                                                         {msg.content.reason && (
-                                                            <p className="text-muted-foreground text-xs mb-3 leading-relaxed">{msg.content.reason}</p>
+                                                            <p className="text-muted-foreground text-xs mb-3 leading-relaxed break-words">{msg.content.reason}</p>
                                                         )}
                                                         {msg.content.status === "CONFLICT" && (
                                                             <div className="flex flex-wrap gap-2 mt-2">
@@ -567,7 +567,7 @@ export function ChatInterface() {
                                                                         handleSubmit(undefined, "Yes, resolve the conflict.")
                                                                     }}
                                                                     disabled={isLoading}
-                                                                    className="flex-1 h-8 text-xs"
+                                                                    className="flex-1 h-8 text-xs min-w-[80px]"
                                                                 >
                                                                     Resolve
                                                                 </Button>
@@ -579,7 +579,7 @@ export function ChatInterface() {
                                                                         handleSubmit(undefined, "Ignore conflict and proceed.")
                                                                     }}
                                                                     disabled={isLoading}
-                                                                    className="flex-1 h-8 text-xs"
+                                                                    className="flex-1 h-8 text-xs min-w-[80px]"
                                                                 >
                                                                     Ignore
                                                                 </Button>
@@ -590,8 +590,8 @@ export function ChatInterface() {
 
                                                 {/* Only show simple text responses in chat, reports go to canvas */}
                                                 {msg.type === "text" && (
-                                                    <div className="bg-card/50 backdrop-blur-sm rounded-2xl border border-border/50 p-4 shadow-sm text-sm">
-                                                        <div className="prose prose-invert prose-sm max-w-none pl-2">
+                                                    <div className="bg-card/50 backdrop-blur-sm rounded-2xl border border-border/50 p-4 shadow-sm text-sm max-w-full overflow-hidden">
+                                                        <div className="prose prose-invert prose-sm max-w-none pl-2 break-words">
                                                             <ReactMarkdown>
                                                                 {typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
                                                             </ReactMarkdown>
@@ -601,12 +601,12 @@ export function ChatInterface() {
 
                                                 {/* Report Ready Notification */}
                                                 {msg.type === "report_ready" && (
-                                                    <div className="bg-green-950/30 border border-green-900/50 rounded-2xl p-4 shadow-sm text-sm">
-                                                        <p className="text-green-400 mb-3">{msg.content}</p>
+                                                    <div className="bg-green-950/30 border border-green-900/50 rounded-2xl p-4 shadow-sm text-sm max-w-full overflow-hidden">
+                                                        <p className="text-green-400 mb-3 text-xs break-words">{msg.content}</p>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            className="w-full gap-2 border-green-900/50 hover:bg-green-950/50"
+                                                            className="w-full gap-2 border-green-900/50 hover:bg-green-950/50 text-xs"
                                                             onClick={() => setIsCanvasOpen(true)}
                                                         >
                                                             <PanelRightOpen className="h-4 w-4" />
@@ -643,7 +643,7 @@ export function ChatInterface() {
                                                 <Bot className="h-4 w-4 text-primary" />
                                             </AvatarFallback>
                                         </Avatar>
-                                        <SmallMagnifyingGlass text="Researching..." />
+                                        <SmallMagnifyingGlass />
                                     </motion.div>
                                 )}
                                 {waitingState && (

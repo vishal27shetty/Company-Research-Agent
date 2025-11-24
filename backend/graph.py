@@ -27,7 +27,7 @@ def route_intake(state: AgentState):
         return "hunter_node"
     elif intent == "RESOLVE":
         return "deep_dive_node"  # <--- The "Yes, fix it" path
-    elif intent == "CHAT":
+    elif intent == "CHAT" or intent == "CLARIFY":
         return "chat_node"
     elif intent == "UPDATE":
         return "updater_node"  # <--- The Surgical Update path
