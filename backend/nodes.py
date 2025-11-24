@@ -524,6 +524,11 @@ async def updater_node(state: AgentState):
     3. DO NOT insert new topics at the top.
     4. DO NOT disrupt the existing flow.
     5. Only modify existing text if it is factually incorrect based on the New Evidence.
+    6. **EXTREMELY IMPORTANT**: The 'updated_artifact_content' MUST contain ONLY the report content. 
+       - DO NOT include the user's question.
+       - DO NOT include the search query.
+       - DO NOT include meta-commentary like "Here is the updated section" or "I have added the info".
+       - Just return the raw markdown for the section.
     
     User Question: {last_message}
     New Evidence: {new_evidence}
