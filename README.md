@@ -123,17 +123,12 @@ LANGCHAIN_PROJECT="Company Research Agent"
 - **Implementation**: New sections are appended, not merged
 - **Benefit**: Users can see the evolution of their research
 
-### 5. **Full-Screen Toggle UI**
-**Why**: Laptop-optimized for demos and presentations.
-- **Implementation**: Chat and Report Canvas each take 100% screen width
-- **Benefit**: Clean, distraction-free experience
-
-### 6. **Server-Sent Events (SSE)**
+### 5. **Server-Sent Events (SSE)**
 **Why**: Real-time streaming of research progress.
 - **Implementation**: Backend streams status updates, citations, and reports
 - **Benefit**: User sees agent "thinking" and working
 
-### 7. **Strict Topic Guardrails**
+### 6. **Strict Topic Guardrails**
 **Why**: Prevents off-topic hallucinations and maintains focus.
 - **Implementation**: Chat node refuses non-business topics
 - **Benefit**: Professional, reliable behavior
